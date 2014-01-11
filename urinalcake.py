@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #This is going to need to be broken up in to a bunch of different files
 # move all class definitions to a sub file classes
-# move all ctypes stuff to a dir containing 
+# move all ctypes stuff to a dir containing
 #    wrappers, type defs, and static variable defs
 """A simple ctypes python wrapper designed to be simple, geneirc,
 clear, and pythonic.
@@ -9,7 +9,7 @@ clear, and pythonic.
 I was going to name this project pytrace or ptracepy, but there are so
 damn many projects with names similar already that I decided to name
 it something totally different. Since one of my ideas was ptracepy
-(pronounced "pee trace pie") I figured urinalcake was close enough. 
+(pronounced "pee trace pie") I figured urinalcake was close enough.
 
 """
 
@@ -22,8 +22,10 @@ import struct
 import platform
 
 def debug(func):
-    
-    return lambda *args, **kwargs: func(*args, **kwargs)
+    def printdata(*args, **kwargs):
+        print(func.__name__, args, kwargs)
+        return lambda *args, **kwargs: func(*args, **kwargs)
+    return printdata()
 
 #libc = ctypes.cdll.LoadLibrary(ctypes.util.find_library('c'))
 libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
@@ -33,16 +35,16 @@ libc.__errno_location.restype = ctypes.POINTER(ctypes.c_int)
 get_errno_loc = libc.__errno_location
 
 ptrace = libc.ptrace
-WORD_LEN = ctypes.sizeof(ctypes.c_void_p) 
+WORD_LEN = ctypes.sizeof(ctypes.c_void_p)
 
 errors = {
     1: "Ptrace Permission denied", #'EPERM',
     3: ('The specified process does not exist, '
         'is not being traced, or has not stopped'),
     # ^ ESRC
-    5: "Memory Access Volation - EIO", 
+    5: "Memory Access Volation - EIO",
     14: "Memory Access Volation - EFAULT",
-    16: "There was an error with allocating or freeing a debug register.", 
+    16: "There was an error with allocating or freeing a debug register.",
     # ^ EBUSY
     22: "An attempt was made to set an invalid option."} #EINVAL
 
@@ -95,10 +97,10 @@ def errcheck(ret, func, args):
             raise OSError(errors[e])
     return ret
 
-ptrace.argtypes = (ctypes.c_int, ctypes.c_uint, 
+ptrace.argtypes = (ctypes.c_int, ctypes.c_uint,
                    ctypes.c_void_p, ctypes.c_void_p)
 ptrace.errcheck = errcheck
-if platform.machine() == 'x86_64': 
+if platform.machine() == 'x86_64':
     ptrace.restype = ctypes.c_ulonglong
 else:
     ptrace.restype = ctypes.c_ulong
@@ -118,10 +120,10 @@ class Siginfo(ctypes.Structure):
         ("si_pid", ctypes.c_int),
         ("si_uid", ctypes.c_int),
         ("si_status", ctypes.c_int),
-        #this needs to be fixed. need to get actual clock_t size per platform 
+        #this needs to be fixed. need to get actual clock_t size per platform
         ("si_utime", ctypes.c_ulong),
         ("si_stime", ctypes.c_ulong),
-        #this needs to be fixed. need to get actual sigval_t size per platform 
+        #this needs to be fixed. need to get actual sigval_t size per platform
         ("si_value", ctypes.c_int),
         ("si_int", ctypes.c_int),
         ("si_ptr", ctypes.c_void_p),
@@ -143,11 +145,19 @@ class Siginfo(ctypes.Structure):
 class Regs(ctypes.Structure):
     """The user_regs_struct from user.h
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._agnostic_names = ARCH_AGNOSTIC_REGS
+
     def __repr__(self):
         attrs = '\n '.join( "%s = %0.{}x".format(WORD_LEN*2) % \
                             (i[0],self.__getattribute__(i[0]))
                             for i in self._fields_)
         return "<user_regs_struct\n %s>" % attrs
+
+    def get_agnostic(self, name):
+        return self.__getattribute__(self._agnostic_names[name])
 
 
 class FPRegs(ctypes.Structure):
@@ -158,9 +168,23 @@ class FPRegs(ctypes.Structure):
         return "<user_fpregs_struct>"
 
 
-#platform_specific
-if platform.machine() == 'x86_64': 
+################################################################################
+# Platform/Arch Specific
+################################################################################
+
+
+def set_x86_regnames(prefix):
+    REGS = dict((i, "%s%sx" % (prefix, i)) for i in ("a","b","c","d"))
+    REGS.update(dict((r,"%s%s" % (prefix,r)) for r in ("ip",
+                                                       "si",
+                                                       "di",
+                                                       "bp",
+                                                       "sp")))
+    return REGS
+
+if platform.machine() == 'x86_64':
     #some of these will be pointers always, fix the defs to match
+    ARCH_AGNOSTIC_REGS = set_x86_regnames("r")
     FPRegs._fields_ = [
         ("cwd", ctypes.c_ushort),
         ("swd", ctypes.c_ushort),
@@ -201,7 +225,8 @@ if platform.machine() == 'x86_64':
         ("es", ctypes.c_ulonglong),
         ("fs", ctypes.c_ulonglong),
         ("gs", ctypes.c_ulonglong))
-else:
+elif platform.machine() == 'x86_32': #is that right?
+    ARCH_AGNOSTIC_REGS = set_x86_regnames("e")
     FPRegs._fields_ = [
         ("cwd", ctypes.c_long),
         ("swd", ctypes.c_long),
@@ -231,19 +256,26 @@ else:
         ("xss", ctypes.c_long))
 
 
+
 ###############################################################################
 # Helper Functions
 ###############################################################################
 
+def _dump_mem(pid, addr, num_bytes):
+    buf = ""
+    for a in range(addr, addr + num_bytes, WORD_LEN):
+        buf += _peek_data(pid, a)
+    return buf[:num_bytes]
+
 
 def _attach(pid):
-    ptrace(PTRACE_ATTACH, pid, 0, 0) 
+    ptrace(PTRACE_ATTACH, pid, 0, 0)
 
 
 def _detach(pid):
-    ptrace(PTRACE_DETACH, pid, 0, 0) 
+    ptrace(PTRACE_DETACH, pid, 0, 0)
 
-
+@debug
 def _peek_data(pid, addr):
     data = ptrace(PTRACE_PEEKDATA, pid, addr, 0)
     if WORD_LEN == 8:
@@ -284,43 +316,118 @@ def _set_siginfo(pid, sig):
 
 
 def _continue(pid):
-    ptrace(PTRACE_CONT, pid, 0, 0) 
+    ptrace(PTRACE_CONT, pid, 0, 0)
 
 #PTRACE_SETOPTIONS
 
 def _next_syscall(pid):
-    ptrace(PTRACE_SYSCALL, pid, 0, 0) 
+    ptrace(PTRACE_SYSCALL, pid, 0, 0)
 
 def _single_step(pid):
-    ptrace(PTRACE_SINGLESTEP, pid, 0, 0) 
+    ptrace(PTRACE_SINGLESTEP, pid, 0, 0)
 
 #PTRACE_LISTEN
 
 def _kill(pid):
-    ptrace(PTRACE_KILL, pid, 0, 0) 
+    ptrace(PTRACE_KILL, pid, 0, 0)
 
 def _interrupt(pid):
-    ptrace(PTRACE_INTERRUPT, pid, 0, 0) 
+    ptrace(PTRACE_INTERRUPT, pid, 0, 0)
 
 
 #PTRACE_SEIZE
-    
+
 
 ###############################################################################
 # Classes
 ###############################################################################
 
 #Create class of SeizedProcess, AttachedProcess, and NewProcess
-#(traceme) that operate differently
+#(traceme) that operate differently and inherit from Process
+# debug(pid) should default to returning a SeizedProcess
+
+class Permissions:
+
+    def __init__(self, perms_string):
+        self.perms_string = perms_string
+        perms = list(perms_string)
+        for (perm,symbol) in (('private','p'),
+                              ('exec','x'),
+                              ('write','w'),
+                              ('read','r')):
+            self.__setattr__(perm, perms.pop() == symbol)
+        self.shared = not self.private
+
+    def __repr__(self):
+        return "<Permission %s>" % self.perms_string
+
+
+class MemMap(list):
+
+    def __init__(self, process):
+        super().__init__(self)
+        self.process = process
+        maps = open('/proc/%s/maps' % process.pid)
+        self.extend(Memory(self.process, line) for line in maps)
+        maps.close()
+
+    def get_stack(self):
+        return next(m for m in self if m.name == '[stack]')
+
+    def get_maps_for(self, addr):
+        return [m for m in self if m.contains_addr(addr)]
+
+
+class Memory:
+
+    def __init__(self, process, mapsline):
+        mapsline = mapsline.split()
+        memrange, perms, offset, dev, inode = mapsline[:5]
+        if len(mapsline) > 5:
+            name = mapsline[-1]
+        else:
+            name = None
+        start, end = memrange.split('-')
+        self.start = int(start, 16)
+        self.end = int(end, 16)
+        self.size = self.end - self.start
+        self.perms = Permissions(perms)
+        self.name = name
+        self.process = process
+
+
+    def contains_addr(self, addr):
+        return self.end > addr > self.start
+
+    def __repr__(self):
+        descrip = "start=%s " % hex(self.start)
+        descrip += "end=%s " % hex(self.end)
+        descrip += "perms=%(perms)s" % self.__dict__
+        if self.name:
+            descrip += " name=%s" % self.name
+        return "<Memory %s>" % descrip
+
+    def read(self, num_bytes=None):
+        if not num_bytes:
+            num_bytes = self.size
+        return _dump_mem(self.process.pid, self.start, num_bytes)
+
+    def read_from_frame(self, num_bytes=None):
+        if not num_bytes:
+            num_bytes = self.size
+        regs = self.process.get_regs()
+        return _dump_mem(self.process.pid, self.process.regs.get_agostic("sp"), num_bytes)
+
 
 class Process:
 
-    def __init__(self, pid, **options):
-        
+    def __init__(self, pid):
         #add setopts
         self.pid = pid
         self.iter_method = "step"
-
+        self.mmap = MemMap(self)
+        self.stack = self.mmap.get_stack()
+        #self.get_regs()
 
     def __iter__(self):
         return self
@@ -352,7 +459,7 @@ class Process:
     def get_regs(self):
         self._update_regs()
         return self.regs
-        
+
     def get_sig(self):
         return _get_siginfo(self.pid)
 
@@ -362,34 +469,31 @@ class Process:
     def set_regs(self):
         _setregs(self.pid, self.regs)
 
-    def dump_mem(self, addr, num_bytes):
-        buf = ""
-        for a in xrange(addr, addr + num_bytes, WORD_LEN):
-            buf += _peek_data(self.pid, a)
-        return buf[:num_bytes]
-
     def detach(self):
         #fucking magnets
         try:
-            self.cont()
+            os.kill(self.pid, signal.SIGINT)
             _detach(self.pid)
         except:
-            os.kill(self.pid, signal.SIGINT)
+            self.cont()
             _detach(self.pid)
 
     def wait(self):
         os.wait()
-        
+
     def stop(self):
         os.kill(signal.SIGSTOP)
-        
-    
 
-if platform.machine() == 'x86_64': 
+    def read_frame(self, num_bytes):
+        self.stack.
+
+
+
+if platform.machine() == 'x86_64':
     def _syscall_info(self):
         return {"syscall_number": self.regs.orig_rax,
                 "args":[self.regs.rdi,
-                    
+
                         self.regs.rsi,
                         self.regs.rdx,
                         self.regs.r10,
@@ -406,7 +510,7 @@ else:
                         self.regs.ebp]}
 
 Process.syscall_info = _syscall_info
-    
+
 
 ###############################################################################
 # Exposed functions
@@ -416,7 +520,7 @@ Process.syscall_info = _syscall_info
 def trace(pid):
     _attach(pid)
     return Process(pid)
-    
+
 attach = trace
 
 
