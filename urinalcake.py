@@ -262,7 +262,7 @@ elif platform.machine() == 'x86_32': #is that right?
 ###############################################################################
 
 def _dump_mem(pid, addr, num_bytes):
-    buf = ""
+    buf = b""
     for a in range(addr, addr + num_bytes, WORD_LEN):
         buf += _peek_data(pid, a)
     return buf[:num_bytes]
@@ -374,7 +374,7 @@ class MemMap(list):
     def get_stack(self):
         return next(m for m in self if m.name == '[stack]')
 
-    def get_maps_for(self, addr):
+    def get_addr_in_maps(self, addr):
         return [m for m in self if m.contains_addr(addr)]
 
 
@@ -416,7 +416,7 @@ class Memory:
         if not num_bytes:
             num_bytes = self.size
         regs = self.process.get_regs()
-        return _dump_mem(self.process.pid, self.process.regs.get_agostic("sp"), num_bytes)
+        return _dump_mem(self.process.pid, self.process.regs.get_agnostic("sp"), num_bytes)
 
 
 class Process:
@@ -484,8 +484,8 @@ class Process:
     def stop(self):
         os.kill(signal.SIGSTOP)
 
-    def read_frame(self, num_bytes):
-        self.stack.
+    def read_from_frame(self, num_bytes):
+        return self.stack.read_from_frame(num_bytes)
 
 
 
