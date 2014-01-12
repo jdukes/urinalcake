@@ -18,18 +18,11 @@ import signal
 import ctypes
 import ctypes.util
 import struct
-
 import platform
 
-def debug(func):
-    def printdata(*args, **kwargs):
-        print(func.__name__, args, kwargs)
-        return func(*args, **kwargs)
-    return printdata
+import inspect
+import functools
 
-
-
-#libc = ctypes.cdll.LoadLibrary(ctypes.util.find_library('c'))
 libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
 
 #this may be linux specific
@@ -81,7 +74,7 @@ PTRACE_INTERRUPT = 0x4207
 PTRACE_LISTEN = 0x4208
 PTRACE_PEEKSIGINFO = 0x4209
 
-
+#/usr/include/asm-generic/signal.h
 #/usr/include/sys/syscall.h
 #/usr/include/asm/unistd_64.h
 
@@ -355,16 +348,25 @@ modified.
         self.name = name
         self.val = None
     
-    #@debug
     def __get__(self, instance, objtype):
         if self.name in instance._get_update:
             instance._update_attr(self.name)
         return self.val
 
-    #@debug
     def __set__(self, instance, val):
         self.val = val
         instance._set_update.add(self.name)
+
+
+def advance(fn):
+    #watch that video again and fix this
+    argspec = inspect.getargspec(fn)
+    @functools.wraps(fn)
+    def update_and_invalidate(cls, *args, **kwargs):
+        for attr in cls._invalidate_on_advance:
+            cls._invalidate_attr(attr)
+        return fn(cls, *args, **kwargs)
+    return update_and_invalidate
 
 
 ###############################################################################
@@ -452,6 +454,10 @@ class Process:
     regs = Live("regs")
     fpregs = Live("fpregs")
     # mmap = Live("mmap")
+    _invalidate_on_advance = set(("regs", "fpregs")) 
+    #this could be done in a
+    #metaclass where all Live objects
+    #are added to the invalidate list
 
     def __init__(self, pid):
         #add setopts
@@ -472,20 +478,21 @@ class Process:
             yield self
         raise StopIteration
     
+    @advance
     def cont(self):
         _continue(self.pid)
 
+    @advance
     def next_syscall(self):
         #fucking magnets
         _next_syscall(self.pid)
         os.wait()
-        return self
 
+    @advance
     def step(self):
         _single_step(self.pid)
         #make sure the process is still running
         os.wait()
-        return self
 
     def get_signal(self):
         return _get_siginfo(self.pid)
