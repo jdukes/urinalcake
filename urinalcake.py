@@ -24,8 +24,10 @@ import platform
 def debug(func):
     def printdata(*args, **kwargs):
         print(func.__name__, args, kwargs)
-        return lambda *args, **kwargs: func(*args, **kwargs)
-    return printdata()
+        return func(*args, **kwargs)
+    return printdata
+
+
 
 #libc = ctypes.cdll.LoadLibrary(ctypes.util.find_library('c'))
 libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
@@ -104,10 +106,11 @@ if platform.machine() == 'x86_64':
     ptrace.restype = ctypes.c_ulonglong
 else:
     ptrace.restype = ctypes.c_ulong
-###############################################################################
-# Type Definitions
-###############################################################################
 
+
+###############################################################################
+# CType Definitions
+###############################################################################
 
 class Siginfo(ctypes.Structure):
     """The siginfo_t struct
@@ -171,7 +174,6 @@ class FPRegs(ctypes.Structure):
 ################################################################################
 # Platform/Arch Specific
 ################################################################################
-
 
 def set_x86_regnames(prefix):
     REGS = dict((i, "%s%sx" % (prefix, i)) for i in ("a","b","c","d"))
@@ -337,6 +339,33 @@ def _interrupt(pid):
 
 #PTRACE_SEIZE
 
+###############################################################################
+# Meta
+###############################################################################
+
+class Live(object):
+    """This descriptor allows attributes to determine if they have been
+modified.
+
+    This is useful for things like registers or file descriptors. On
+    set it adds
+
+    """
+    def __init__(self, name=None):
+        self.name = name
+        self.val = None
+    
+    #@debug
+    def __get__(self, instance, objtype):
+        if self.name in instance._get_update:
+            instance._update_attr(self.name)
+        return self.val
+
+    #@debug
+    def __set__(self, instance, val):
+        self.val = val
+        instance._set_update.add(self.name)
+
 
 ###############################################################################
 # Classes
@@ -420,6 +449,9 @@ class Memory:
 
 
 class Process:
+    regs = Live("regs")
+    fpregs = Live("fpregs")
+    # mmap = Live("mmap")
 
     def __init__(self, pid):
         #add setopts
@@ -427,23 +459,21 @@ class Process:
         self.iter_method = "step"
         self.mmap = MemMap(self)
         self.stack = self.mmap.get_stack()
-        #self.get_regs()
+        self._set_update = set()
+        self._get_update = set(("regs", "fpregs"))
+        
+    def iter_step(self):
+        while self.step():
+            yield self
+        raise StopIteration
 
-    def __iter__(self):
-        return self
-
+    def iter_syscall(self):
+        while self.next_syscall():
+            yield self
+        raise StopIteration
+    
     def cont(self):
         _continue(self.pid)
-
-    def set_iter_method(self, method):
-        assert method in ["step", "syscall"], "Must be one of step or syscall"
-        self.iter_method = method
-
-    def next(self):
-        if self.iter_method == "step":
-            return self.step()
-        elif self.iter_method == "syscall":
-            return self.next_syscall()
 
     def next_syscall(self):
         #fucking magnets
@@ -453,21 +483,26 @@ class Process:
 
     def step(self):
         _single_step(self.pid)
+        #make sure the process is still running
         os.wait()
         return self
 
-    def get_regs(self):
-        self._update_regs()
-        return self.regs
-
-    def get_sig(self):
+    def get_signal(self):
         return _get_siginfo(self.pid)
 
-    def _update_regs(self):
-        self.regs = _getregs(self.pid)
+    def _update_attr(self, attr):
+        if attr == "regs":
+            self.regs = _getregs(self.pid)
+        elif attr == "fpregs":
+            self.fpregs = _getfpregs(self.pid)
+        elif attr == "mmap":
+            self.mmap = MemMap(self)
 
-    def set_regs(self):
-        _setregs(self.pid, self.regs)
+    def _invalidate_attr(self, attr):
+        self._get_update.add(attr)
+
+    def _set_regs(self):
+        _setregs(self.pid, self._regs)
 
     def detach(self):
         #fucking magnets
