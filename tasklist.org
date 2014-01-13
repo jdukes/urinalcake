@@ -43,3 +43,7 @@
 *** any time a syscall is hit during next_syscall it should fire a hook
 **** It should be possible to add hooks with a decorator     
 ***** This decorator should be named @sys_<call>_hook, eg @sys_write_hook
+* Make work on BSD, OSX, iOS
+* Make work on arm, mips, ppc
+* replicate as much functionality as possible in windows
+* write a wrapper that exposes functionality based on OS
