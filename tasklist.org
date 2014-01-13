@@ -22,6 +22,8 @@
 ** Should be able to call a method that disassembles 
    a number of instructions after ip taking a parameter of how many
 * flow graphing
+* call stack map
+** resolve call stack to function names
 * function symbol resolution
 * type wrappers that take a word and intepret as int or uint
 * register aliases, e.g: 
