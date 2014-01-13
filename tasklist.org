@@ -1,0 +1,45 @@
+#+TODO: TODO(t) | BLOCKED(b) DONE(d) FUCKTHISSHITNOPE(f)
+* Break code in to multiple files (I will handle this)
+  lets discuss organization
+** Isolate all ctypes and direct C interfaces to directory of their own
+* add ability to launch process and trace (PTRACE_TRACME)
+** This may be best done by inheritnig Process as NewProcess
+** Change Process to reflect the functionality of PTRACE_SEIZE
+** create `seize`, `attach`, and `trace_launch` helper functions
+* document everything for make of good introspect
+* Add unit testing for all functionality
+** use `doctest` module. 
+*** every method should contain code examples
+* Make all code pep8 compliant
+* finish adding all ptrace functionality
+** PTRACE_SETOPTIONS
+** PTRACE_LISTEN
+** PTRACE_SEIZE
+* add file descriptor list that is a Live list
+** add functionality to swap file descriptors
+*** This should be a method of Program as in Program.swapfd(old_fd, new_fd)
+* add disassembly
+** Should be able to call a method that disassembles 
+   a number of instructions after ip taking a parameter of how many
+* flow graphing
+* function symbol resolution
+* type wrappers that take a word and intepret as int or uint
+* register aliases, e.g: 
+  regs.rax == 64 bit register (if amd64)
+  regs.eax == bottom 32 bits of rax
+  regs.ax == bottom 16 bits of eax
+  regs.al == bottom 8 bits of ax
+** see http://en.wikipedia.org/wiki/X86-64#Architectural_features for details
+* Make memory maps live
+* fix next_syscall to actually get next syscall
+** This should involve checking that the signal type is of type sigtrap??
+* make iter_step and iter_syscall actually work
+* fix error handling
+** Errors are well documented in the man pages
+*** errors that are handled by the rror dict should all have their own Exception
+* Build a table of syscalls 
+** Syscalls should be resolved on request to a table that inits a syscall object
+*** This object should explain which regs mean what
+*** any time a syscall is hit during next_syscall it should fire a hook
+**** It should be possible to add hooks with a decorator     
+***** This decorator should be named @sys_<call>_hook, eg @sys_write_hook
