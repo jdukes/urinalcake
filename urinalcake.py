@@ -270,7 +270,6 @@ def _attach(pid):
 def _detach(pid):
     ptrace(PTRACE_DETACH, pid, 0, 0)
 
-@debug
 def _peek_data(pid, addr):
     data = ptrace(PTRACE_PEEKDATA, pid, addr, 0)
     if WORD_LEN == 8:
@@ -425,7 +424,6 @@ class Memory:
         self.perms = Permissions(perms)
         self.name = name
         self.process = process
-
 
     def contains_addr(self, addr):
         return self.end > addr > self.start
