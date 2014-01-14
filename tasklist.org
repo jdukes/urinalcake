@@ -2,6 +2,7 @@
 * Break code in to multiple files (I will handle this)
   lets discuss organization
 ** Isolate all ctypes and direct C interfaces to directory of their own
+*** (long distance) replace all ctypes with library that parses c
 * add ability to launch process and trace (PTRACE_TRACME)
 ** This may be best done by inheritnig Process as NewProcess
 ** Change Process to reflect the functionality of PTRACE_SEIZE
