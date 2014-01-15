@@ -1,8 +1,8 @@
 * <2014-01-15 Wed>-<2014-02-01 Sat> [0%] Organize code base in to seperate files
-  1. [ ] [0%] Move all c related stuff in to a directory 
+  1. [-] [33%] Move all c related stuff in to a directory 
      + [ ] Move defines in to a defines file
-     + [ ] Move ctypes structs, error handlers, etc in to a file
-     + [ ] [%] Create generic system
+     + [X] Move ctypes structs, error handlers, etc in to a file
+     + [ ] [0%] Create generic system
        + [ ] move all arch specific stuff in to a subdir wich with
          each arch as a file. General will be an abstraction layer.
        + [ ] ArchSpecificProcess will be a metaclass. 
