@@ -249,6 +249,19 @@ def _traceme():
     ptrace(PTRACE_TRACEME, 0, 0, 0)
 
 def attach_process(pid):
+    """Internal wrapper for PTRACE_ATTACH.
+
+    This must be run as root or on a child process on modern
+    unices. To execute this as a stand alone function in an
+    interactive shell requires a bit of mad hackery...
+    
+    >>> launch = lambda *args: os.fork() or os.execl(*args)
+    >>> attach_process(launch('/bin/ls', 'ls'))
+
+    You are now attached. Of course you don't know the pid... so,
+    there's that. This function is not intended to be used alone. 
+
+    """
     ptrace(PTRACE_ATTACH, pid, 0, 0)
 
 def launch_process(filename, *args):
