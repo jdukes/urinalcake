@@ -551,7 +551,10 @@ class GenericProcess:
             _detach(self.pid)
 
     def wait(self):
-        os.wait()
+        return os.wait()
+        
+    def kill(self):
+        _kill(self.pid)
 
     def stop(self):
         os.kill(signal.SIGSTOP)
