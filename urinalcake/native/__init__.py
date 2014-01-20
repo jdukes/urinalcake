@@ -280,15 +280,44 @@ def launch_process(filename, *args):
     else:
         return child
 
+def _getregs(pid):
+    """Internal wrapper for PTRACE_GETREGS which returns a Regs object.
 
-def _dump_mem(pid, addr, num_bytes):
-    buf = b""
-    for a in range(addr, addr + num_bytes, WORD_LEN):
-        buf += _peek_data(pid, a)
-    return buf[:num_bytes]
+    Regs is a ctypes wrapper that also provides an arch agnostic way
+    to access registers.
+
+    >>> regs = _getregs(pid)
+    >>> instruction_pointer = regs.get_agnostic("ip")
+    >>> type(instruction_pointer)
+    <class 'int'>
+
+    """
+    regs = Regs()
+    ptrace(PTRACE_GETREGS, pid, 0, ctypes.byref(regs));
+    return regs
 
 
 def _peek_data(pid, addr):
+    """Internal wrapper for PTRACE_PEEKDATA, returns a numeric value.
+
+    The numeric value returned from _peek_data is one WORD:
+
+    >>> instruction_pointer = regs.get_agnostic("ip")
+    >>> data = _peek_data(pid, instruction_pointer)
+    >>> len(data) == ctypes.sizeof(ctypes.c_void_p)
+    True
+    
+    It will raise an exception if you try to access an invalid memory
+    location:
+
+    >>> try:
+    ... 	data = _peek_data(pid, 0)
+    ... except OSError as e:
+    ... 	print(e)
+    ... 
+    Memory Access Volation - EIO
+
+    """
     data = ptrace(PTRACE_PEEKDATA, pid, addr, 0)
     if WORD_LEN == 8:
         return struct.pack('q', data)
@@ -296,18 +325,41 @@ def _peek_data(pid, addr):
         return struct.pack('l', data)
 
 
+def _dump_mem(pid, addr, num_bytes):
+    """Helper function for that wrapps _peek_data returning bytes.
+
+    This function allows you to dump a number of bytes of memory
+    starting at an address from a given traced pid.
+
+    >>> len(_dump_mem(pid, instruction_pointer, 10))
+    10
+
+    """
+    buf = b""
+    for a in range(addr, addr + num_bytes, WORD_LEN):
+        buf += _peek_data(pid, a)
+    return buf[:num_bytes]
+
+
 def _peek_user(pid, addr):
+    """Internal wrapper for PTRACE_PEEKUSER, returns a word.
+
+    This dumps the USER area, which contains regs and such. It is not
+    useful for us as we have other functions that do the same thing in
+    a better way. This code exists for consistency. Basically, fuck
+    this shit.
+
+    """
     assert addr % WORD_LEN == 0, "addr must be word aligned"
     return ptrace(PTRACE_PEEKUSER, pid, addr, 0)
 
 
-def _getregs(pid):
-    regs = Regs()
-    ptrace(PTRACE_GETREGS, pid, 0, ctypes.byref(regs));
-    return regs
-
-
 def _setregs(pid, regs):
+    """Internal wrapper for PTRACE_SETREGS.
+
+    This function allows you to set registers.
+    """
+    #!!fill out unit testing for this
     return ptrace(PTRACE_SETREGS, pid, 0, ctypes.byref(regs));
 
 
