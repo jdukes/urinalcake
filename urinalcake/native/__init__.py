@@ -10,8 +10,6 @@ import inspect
 import functools
 
 
-from subprocess import Popen
-
 #__all__ = []
 
 libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
@@ -246,20 +244,28 @@ elif platform.machine() == 'x86_32': #is that right?
 # Helper Functions
 ###############################################################################
 
+def _traceme():
+    """Internal wrapper for PTRACE_TRACEME, only used in luanch_process."""
+    ptrace(PTRACE_TRACEME, 0, 0, 0)
+
 def attach_process(pid):
     ptrace(PTRACE_ATTACH, pid, 0, 0)
 
+def launch_process(filename, *args):
+    """Launch a process traced, returns the pid.
 
-def launch_process(path, *args):
-    #this is suboptimal
-    arglist = list(args)
-    arglist.insert(0, path)
-    try:
-        p = Popen(arglist)
-    except RuntimeError:
-        pass
-    ptrace(PTRACE_ATTACH, p.pid, 0, 0)
-    return p
+    >>> pid = launch_process('/bin/ls', 'ls')
+    >>> type(pid)
+    <class 'int'>
+    
+    You are now attached.    
+    """
+    child = os.fork()
+    if (child == 0):
+        ptrace(PTRACE_TRACEME, 0, 0, 0)
+        os.execl(filename, *args)
+    else:
+        return child
 
 
 def _dump_mem(pid, addr, num_bytes):

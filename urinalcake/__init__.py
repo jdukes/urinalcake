@@ -31,10 +31,10 @@ def trace(pid):
 def launch(*args):
     """This should launch a process traced. 
 
-    Arguments are passed directly in to Popen, then the process is
-    launched. This is a little suboptimal.
+    Arguments are passed directly in to execl, then the process is
+    launched. 
 
-    >>> p = launch('ls')
+    >>> p = launch('/bin/ls', 'ls')
     >>> p
     <urinalcake.Process object at 0x7ffbaaa4aad0>
 
