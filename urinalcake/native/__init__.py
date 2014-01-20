@@ -558,3 +558,8 @@ class GenericProcess:
 
     def read_from_frame(self, num_bytes):
         return self.stack.read_from_frame(num_bytes)
+
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
