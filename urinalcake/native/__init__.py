@@ -288,9 +288,6 @@ def _dump_mem(pid, addr, num_bytes):
     return buf[:num_bytes]
 
 
-def _detach(pid):
-    ptrace(PTRACE_DETACH, pid, 0, 0)
-
 def _peek_data(pid, addr):
     data = ptrace(PTRACE_PEEKDATA, pid, addr, 0)
     if WORD_LEN == 8:
@@ -335,16 +332,21 @@ def _continue(pid):
 
 #PTRACE_SETOPTIONS
 
+
 def _next_syscall(pid):
     ptrace(PTRACE_SYSCALL, pid, 0, 0)
+
 
 def _single_step(pid):
     ptrace(PTRACE_SINGLESTEP, pid, 0, 0)
 
+
 #PTRACE_LISTEN
+
 
 def _kill(pid):
     ptrace(PTRACE_KILL, pid, 0, 0)
+
 
 def _interrupt(pid):
     ptrace(PTRACE_INTERRUPT, pid, 0, 0)
@@ -352,6 +354,8 @@ def _interrupt(pid):
 
 #PTRACE_SEIZE
 
+def _detach(pid):
+    ptrace(PTRACE_DETACH, pid, 0, 0)
 
 
 
