@@ -45,7 +45,3 @@ def launch(*args):
 #attach = trace
 
 
-if __name__ == "__main__":
-    import doctest
-    if not doctest.testmod().failed:
-        open("README.md",'w').write(__doc__)
