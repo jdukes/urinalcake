@@ -211,7 +211,7 @@ if platform.machine() == 'x86_64':
         ("es", ctypes.c_ulonglong),
         ("fs", ctypes.c_ulonglong),
         ("gs", ctypes.c_ulonglong))
-elif platform.machine() == 'x86_32': #is that right?
+elif platform.machine() == 'i686':
     ARCH_AGNOSTIC_REGS = set_x86_regnames("e")
     FPRegs._fields_ = [
         ("cwd", ctypes.c_long),
