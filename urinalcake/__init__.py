@@ -35,8 +35,6 @@ def launch(*args):
     launched. 
 
     >>> p = launch('/bin/ls', 'ls')
-    >>> p
-    <urinalcake.Process object at 0x7ffbaaa4aad0>
 
     """
     p = launch_process(*args)
