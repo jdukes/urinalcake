@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import inspect
-import functools
+from decorator import decorator
 
 ###############################################################################
 # getters/Setters
@@ -27,15 +27,14 @@ modified.
         self.val = val
         instance._set_update.add(self.name)
 
+
 ###############################################################################
 # Decorators
 ###############################################################################
 
 
+@decorator
 def advance(fn):
-    #watch that video again and fix this
-    argspec = inspect.getargspec(fn)
-    @functools.wraps(fn)
     def update_and_invalidate(cls, *args, **kwargs):
         for attr in cls._invalidate_on_advance:
             cls._invalidate_attr(attr)
