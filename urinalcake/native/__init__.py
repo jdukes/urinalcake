@@ -6,10 +6,8 @@ import ctypes.util
 import signal
 import platform
 import os
-import inspect
-import functools
 
-from .meta import Live, advance
+from ..meta import Live, advance
 
 #__all__ = []
 
