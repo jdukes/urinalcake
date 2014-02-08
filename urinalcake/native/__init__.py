@@ -9,7 +9,7 @@ import platform
 from os import wait, kill, execl, fork
 from sys import stdout
 
-from ..meta import Live, advance
+from ..meta import Live, advance, MetaProcess
 
 #__all__ = []
 
@@ -503,15 +503,11 @@ class Memory:
         return _dump_mem(self.process.pid, self.process.regs.get_agnostic("sp"), num_bytes)
 
 
-class GenericProcess:
-    regs = Live("regs")
-    fpregs = Live("fpregs")
-    stack = Live("stack")
+class GenericProcess(metaclass=MetaProcess):
+    regs = Live()
+    fpregs = Live()
+    stack = Live()
     # mmap = Live("mmap")
-    _invalidate_on_advance = set(("regs", "fpregs", "stack")) 
-    #this could be done in a
-    #metaclass where all Live objects
-    #are added to the invalidate list
 
     def __init__(self, pid):
         #add setopts
