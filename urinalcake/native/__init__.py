@@ -33,7 +33,7 @@ errors = {
     # ^ EBUSY
     22: "An attempt was made to set an invalid option."} #EINVAL
 
-
+PROCESS_ALIVE = 1407 #???
 PTRACE_TRACEME = 0
 PTRACE_PEEKTEXT = 1
 PTRACE_PEEKDATA = 2
@@ -418,8 +418,6 @@ def _detach(pid):
     ptrace(PTRACE_DETACH, pid, 0, 0)
 
 
-
-
 ###############################################################################
 # Classes
 ###############################################################################
@@ -463,7 +461,9 @@ class MemMap(list):
         return [m for m in self if m.contains_addr(addr)]
 
 
+
 class Memory:
+    #I feel as though memory objects should expose a file like interface. 
 
     def __init__(self, process, mapsline):
         mapsline = mapsline.split()
@@ -508,6 +508,7 @@ class GenericProcess(metaclass=MetaProcess):
     fpregs = Live()
     mmap = Live()
     stack = Live()
+    last_sig = Live()
 
     def __init__(self, pid):
         #add setopts
@@ -536,7 +537,8 @@ class GenericProcess(metaclass=MetaProcess):
     def next_syscall(self):
         #fucking magnets
         _next_syscall(self.pid)
-        wait() #this needs to wait in a specific way...
+        pid, status = wait()
+        return status == PROCESS_ALIVE
 
     @advance
     def step(self):
@@ -544,13 +546,15 @@ class GenericProcess(metaclass=MetaProcess):
 
         """
         _single_step(self.pid)
-        #make sure the process is still running
-        wait()
+        pid, status = wait()
+        return status == PROCESS_ALIVE
 
     def get_signal(self):
         return _get_siginfo(self.pid)
 
     def _update_attr(self, attr):
+        #actually... I can make Live take an update function and this
+        #goes away.
         if attr == "regs":
             self.regs = _getregs(self.pid)
         elif attr == "fpregs":
@@ -558,8 +562,9 @@ class GenericProcess(metaclass=MetaProcess):
         elif attr == "mmap":
             self.mmap = MemMap(self)
         elif attr == "stack":
-            self.mmap = MemMap(self)
             self.stack = self.mmap.get_stack()
+        elif attr == "last_sig":
+            self.last_sig = self.get_signal()
 
     def _invalidate_attr(self, attr):
         self._get_update.add(attr)
@@ -577,7 +582,11 @@ class GenericProcess(metaclass=MetaProcess):
             _detach(self.pid)
 
     def wait(self):
-        return wait()
+        #make everything use this and record status for future use
+        pid, status = wait()
+        while not pid == self.pid:
+            pid, status = wait()
+        return pid, sig
         
     def kill(self):
         _kill(self.pid)
