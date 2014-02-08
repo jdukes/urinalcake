@@ -4,4 +4,4 @@ import urinalcake
 
 if not ( doctest.testmod(m=urinalcake).failed or 
          doctest.testmod(m=urinalcake.native).failed):
-    open("README.md",'w').write(__doc__)
+    open("README.md",'w').write(urinalcake.__doc__)
