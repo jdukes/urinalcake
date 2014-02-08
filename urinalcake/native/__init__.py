@@ -5,7 +5,9 @@ import ctypes
 import ctypes.util
 import signal
 import platform
-import os
+
+from os import wait, kill, execl, fork
+from sys import stdout
 
 from ..meta import Live, advance
 
@@ -254,7 +256,7 @@ def attach_process(pid):
     unices. To execute this as a stand alone function in an
     interactive shell requires a bit of mad hackery...
     
-    >>> launch = lambda *args: os.fork() or os.execl(*args)
+    >>> launch = lambda *args: fork() or execl(*args)
     >>> attach_process(launch('/bin/ls', 'ls'))
 
     You are now attached. Of course you don't know the pid... so,
@@ -267,16 +269,17 @@ def launch_process(filename, *args):
     """Launch a process traced, returns the pid.
 
     >>> pid = launch_process('/bin/ls', 'ls')
-    >>> type(pid)
-    <class 'int'>
     
     You are now attached.    
     """
-    child = os.fork()
+    child = fork()
     if (child == 0):
         ptrace(PTRACE_TRACEME, 0, 0, 0)
-        os.execl(filename, *args)
+        execl(filename, *args)
     else:
+        pid, signal = wait()
+        while not pid == child:
+            pid, signal = wait()
         return child
 
 def _getregs(pid):
@@ -285,6 +288,7 @@ def _getregs(pid):
     Regs is a ctypes wrapper that also provides an arch agnostic way
     to access registers.
 
+    >>> pid = launch_process('/bin/ls', 'ls')
     >>> regs = _getregs(pid)
     >>> instruction_pointer = regs.get_agnostic("ip")
     >>> type(instruction_pointer)
@@ -301,6 +305,8 @@ def _peek_data(pid, addr):
 
     The numeric value returned from _peek_data is one WORD:
 
+    >>> pid = launch_process('/bin/ls', 'ls')
+    >>> regs = _getregs(pid)
     >>> instruction_pointer = regs.get_agnostic("ip")
     >>> data = _peek_data(pid, instruction_pointer)
     >>> len(data) == ctypes.sizeof(ctypes.c_void_p)
@@ -330,6 +336,9 @@ def _dump_mem(pid, addr, num_bytes):
     This function allows you to dump a number of bytes of memory
     starting at an address from a given traced pid.
 
+    >>> pid = launch_process('/bin/ls', 'ls')
+    >>> regs = _getregs(pid)
+    >>> instruction_pointer = regs.get_agnostic("ip")
     >>> len(_dump_mem(pid, instruction_pointer, 10))
     10
 
@@ -534,13 +543,13 @@ class GenericProcess:
     def next_syscall(self):
         #fucking magnets
         _next_syscall(self.pid)
-        os.wait()
+        wait()
 
     @advance
     def step(self):
         _single_step(self.pid)
         #make sure the process is still running
-        os.wait()
+        wait()
 
     def get_signal(self):
         return _get_siginfo(self.pid)
@@ -565,20 +574,20 @@ class GenericProcess:
     def detach(self):
         #fucking magnets
         try:
-            os.kill(self.pid, signal.SIGINT)
+            kill(self.pid, signal.SIGINT)
             _detach(self.pid)
         except:
             self.cont()
             _detach(self.pid)
 
     def wait(self):
-        return os.wait()
+        return wait()
         
     def kill(self):
         _kill(self.pid)
 
     def stop(self):
-        os.kill(signal.SIGSTOP)
+        kill(signal.SIGSTOP)
 
     def read_from_frame(self, num_bytes):
         return self.stack.read_from_frame(num_bytes)
