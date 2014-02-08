@@ -543,10 +543,13 @@ class GenericProcess:
     def next_syscall(self):
         #fucking magnets
         _next_syscall(self.pid)
-        wait()
+        wait() #this needs to wait in a specific way...
 
     @advance
     def step(self):
+        """Single step the process
+
+        """
         _single_step(self.pid)
         #make sure the process is still running
         wait()
@@ -592,7 +595,3 @@ class GenericProcess:
     def read_from_frame(self, num_bytes):
         return self.stack.read_from_frame(num_bytes)
 
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
