@@ -482,7 +482,10 @@ class MemMap(list):
         maps.close()
 
     def get_stack(self):
-        return next(m for m in self if m.name == '[stack]')
+        try:
+            return next(m for m in self if m.name == '[stack]')
+        except StopIteration:
+            return None
 
     def get_addr_in_maps(self, addr):
         return [m for m in self if m.contains_addr(addr)]
@@ -531,8 +534,9 @@ class Memory:
 class GenericProcess:
     regs = Live("regs")
     fpregs = Live("fpregs")
+    stack = Live("stack")
     # mmap = Live("mmap")
-    _invalidate_on_advance = set(("regs", "fpregs")) 
+    _invalidate_on_advance = set(("regs", "fpregs", "stack")) 
     #this could be done in a
     #metaclass where all Live objects
     #are added to the invalidate list
@@ -542,7 +546,6 @@ class GenericProcess:
         self.pid = pid
         self.iter_method = "step"
         self.mmap = MemMap(self)
-        self.stack = self.mmap.get_stack()
         self._set_update = set()
         self._get_update = set(("regs", "fpregs"))
         
@@ -586,6 +589,9 @@ class GenericProcess:
             self.fpregs = _getfpregs(self.pid)
         elif attr == "mmap":
             self.mmap = MemMap(self)
+        elif attr == "stack":
+            self.mmap = MemMap(self)
+            self.stack = self.mmap.get_stack()
 
     def _invalidate_attr(self, attr):
         self._get_update.add(attr)
