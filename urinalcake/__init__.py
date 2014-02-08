@@ -40,7 +40,7 @@ def launch(*args):
 
     """
     p = launch_process(*args)
-    return Process(p.pid)
+    return Process(p)
 
 #attach = trace
 
