@@ -506,20 +506,17 @@ class Memory:
 class GenericProcess(metaclass=MetaProcess):
     regs = Live()
     fpregs = Live()
+    mmap = Live()
     stack = Live()
-    # mmap = Live("mmap")
 
     def __init__(self, pid):
         #add setopts
         self.pid = pid
-        self.iter_method = "step"
-        self.mmap = MemMap(self)
         self._set_update = set()
-        self._get_update = set(("regs", "fpregs"))
+        self._get_update = set(self._live)
         
     def __del__(self):
         self.detach()
-        super().__del__(self)
         
     def iter_step(self):
         while self.step():
