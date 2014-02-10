@@ -628,7 +628,11 @@ class PtraceProcess(metaclass=MetaProcess):
         self._get_update = set(self._live)
 
     def __del__(self):
-        self.detach()
+        #What's the right thing for this?
+        try:
+            self.detach()
+        except:
+            pass
 
     def iter_step(self):
         while self.step():
