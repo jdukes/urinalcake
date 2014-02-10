@@ -44,6 +44,7 @@ class Live:
     def __get__(self, instance, objtype):
         if self.name in instance._get_update:
             instance._update_attr(self.name)
+            instance._get_update.remove(self.name)
         return self.val
 
     def __set__(self, instance, val):

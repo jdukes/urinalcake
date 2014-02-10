@@ -1,8 +1,4 @@
 #!/usr/bin/env python
-#This is going to need to be broken up in to a bunch of different files
-# move all class definitions to a sub file classes
-# move all ctypes stuff to a dir containing
-#    wrappers, type defs, and static variable defs
 """A simple ctypes python wrapper designed to be simple, geneirc,
 clear, and pythonic.
 
@@ -13,11 +9,12 @@ it something totally different. Since one of my ideas was ptracepy
 
 """
 
-from .native import GenericProcess, attach_process, launch_process
+from .native import PtraceProcess, attach_process, launch_process
 
+# class Process(PtraceProcess):
+#     pass
 
-class Process(GenericProcess):
-    pass
+Process = PtraceProcess
 
 ###############################################################################
 # Exposed functions

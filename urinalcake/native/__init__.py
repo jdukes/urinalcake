@@ -92,6 +92,20 @@ else:
     ptrace.restype = ctypes.c_ulong
 
 
+# ptrace(PTRACE_PEEKTEXT/PEEKDATA/PEEKUSER, pid, addr, 0);
+# ptrace(PTRACE_POKETEXT/POKEDATA/POKEUSER, pid, addr, long_val);
+# ptrace(PTRACE_GETREGS/GETFPREGS, pid, 0, &struct);
+# ptrace(PTRACE_SETREGS/SETFPREGS, pid, 0, &struct);
+# ptrace(PTRACE_GETREGSET, pid, NT_foo, &iov);
+# ptrace(PTRACE_SETREGSET, pid, NT_foo, &iov);
+# ptrace(PTRACE_GETSIGINFO, pid, 0, &siginfo);
+# ptrace(PTRACE_SETSIGINFO, pid, 0, &siginfo);
+# ptrace(PTRACE_GETEVENTMSG, pid, 0, &long_var);
+# ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_flags);
+
+
+
+
 
 ###############################################################################
 # CType Definitions
@@ -249,28 +263,33 @@ def _traceme():
     """Internal wrapper for PTRACE_TRACEME, only used in luanch_process."""
     ptrace(PTRACE_TRACEME, 0, 0, 0)
 
+
 def attach_process(pid):
     """Internal wrapper for PTRACE_ATTACH.
 
     This must be run as root or on a child process on modern
     unices. To execute this as a stand alone function in an
     interactive shell requires a bit of mad hackery...
-    
+
     >>> launch = lambda *args: fork() or execl(*args)
     >>> attach_process(launch('/bin/ls', 'ls'))
 
     You are now attached. Of course you don't know the pid... so,
-    there's that. This function is not intended to be used alone. 
-
+    there's that. This function is not intended to be used alone.
     """
     ptrace(PTRACE_ATTACH, pid, 0, 0)
+
+
 
 def launch_process(filename, *args):
     """Launch a process traced, returns the pid.
 
     >>> pid = launch_process('/bin/ls', 'ls')
-    
-    You are now attached.    
+
+    You are now attached.
+
+    And cleanup...
+    >>> kill(pid, 9)
     """
     child = fork()
     if (child == 0):
@@ -281,6 +300,7 @@ def launch_process(filename, *args):
         while not pid == child:
             pid, signal = wait()
         return child
+
 
 def _getregs(pid):
     """Internal wrapper for PTRACE_GETREGS which returns a Regs object.
@@ -294,6 +314,8 @@ def _getregs(pid):
     >>> type(instruction_pointer)
     <class 'int'>
 
+    And cleanup...
+    >>> kill(pid, 9)
     """
     regs = Regs()
     ptrace(PTRACE_GETREGS, pid, 0, ctypes.byref(regs));
@@ -311,17 +333,19 @@ def _peek_data(pid, addr):
     >>> data = _peek_data(pid, instruction_pointer)
     >>> len(data) == ctypes.sizeof(ctypes.c_void_p)
     True
-    
+
     It will raise an exception if you try to access an invalid memory
     location:
 
     >>> try:
-    ... 	data = _peek_data(pid, 0)
+    ...         data = _peek_data(pid, 0)
     ... except OSError as e:
-    ... 	print(e)
-    ... 
+    ...         print(e)
+    ...
     Memory Access Volation - EIO
 
+    And cleanup...
+    >>> kill(pid, 9)
     """
     data = ptrace(PTRACE_PEEKDATA, pid, addr, 0)
     if WORD_LEN == 8:
@@ -330,7 +354,7 @@ def _peek_data(pid, addr):
         return struct.pack('l', data)
 
 
-def _dump_mem(pid, addr, num_bytes):
+def _read_mem(pid, addr, num_bytes):
     """Helper function for that wrapps _peek_data returning bytes.
 
     This function allows you to dump a number of bytes of memory
@@ -339,10 +363,13 @@ def _dump_mem(pid, addr, num_bytes):
     >>> pid = launch_process('/bin/ls', 'ls')
     >>> regs = _getregs(pid)
     >>> instruction_pointer = regs.get_agnostic("ip")
-    >>> len(_dump_mem(pid, instruction_pointer, 10))
+    >>> len(_read_mem(pid, instruction_pointer, 10))
     10
 
+    And cleanup...
+    >>> kill(pid, 9)
     """
+
     buf = b""
     for a in range(addr, addr + num_bytes, WORD_LEN):
         buf += _peek_data(pid, a)
@@ -463,7 +490,7 @@ class MemMap(list):
 
 
 class Memory:
-    #I feel as though memory objects should expose a file like interface. 
+    #I feel as though memory objects should expose a file like interface.
 
     def __init__(self, process, mapsline):
         mapsline = mapsline.split()
@@ -494,16 +521,35 @@ class Memory:
     def read(self, num_bytes=None):
         if not num_bytes:
             num_bytes = self.size
-        return _dump_mem(self.process.pid, self.start, num_bytes)
+        return _read_mem(self.process.pid, self.start, num_bytes)
 
     def read_from_frame(self, num_bytes=None):
         if not num_bytes:
             num_bytes = self.size
         regs = self.process.get_regs()
-        return _dump_mem(self.process.pid, self.process.regs.get_agnostic("sp"), num_bytes)
+        return _read_mem(self.process.pid, self.process.regs.get_agnostic("sp"), num_bytes)
 
 
-class GenericProcess(metaclass=MetaProcess):
+class PtraceProcess(metaclass=MetaProcess):
+    """This base class that creates a PtraceProcess.
+
+    As things develop this will be broken up. Right now this works. We
+    create a process by launching or attaching to a process then
+    passing the pid as an argument for class instantiation.
+
+    >>> pid = launch_process('/bin/ls', 'ls')
+    >>> p = PtraceProcess(pid)
+
+    We now have a ptrace process.
+
+    >>> p.kill()
+
+    """
+    #char_ptr, size = next( (p.regs.rsi,p.regs.rdx)
+    #                           for p in p.iter_syscall()
+    #                           if p.regs.orig_rax == 1 )
+    # ^ this sucks actually.
+    # Live should take a get and set method
     regs = Live()
     fpregs = Live()
     mmap = Live()
@@ -512,30 +558,34 @@ class GenericProcess(metaclass=MetaProcess):
 
     def __init__(self, pid):
         #add setopts
+        #make this check if we're actually tracing
         self.pid = pid
         self._set_update = set()
         self._get_update = set(self._live)
-        
+
     def __del__(self):
         self.detach()
-        
+
     def iter_step(self):
         while self.step():
             yield self
         raise StopIteration
 
     def iter_syscall(self):
+        #perhaps this should take an arg of a list of syscall numbers
         while self.next_syscall():
             yield self
         raise StopIteration
-    
+
     @advance
     def cont(self):
         _continue(self.pid)
 
     @advance
     def next_syscall(self):
-        #fucking magnets
+        #this should return a syscall object that describes the
+        #syscall and args.
+        #http://blog.rchapman.org/post/36801038863/linux-system-call-table-for-x86-64
         _next_syscall(self.pid)
         pid, status = wait()
         return status == PROCESS_ALIVE
@@ -553,8 +603,7 @@ class GenericProcess(metaclass=MetaProcess):
         return _get_siginfo(self.pid)
 
     def _update_attr(self, attr):
-        #actually... I can make Live take an update function and this
-        #goes away.
+        #I want to make this go away by adding a param
         if attr == "regs":
             self.regs = _getregs(self.pid)
         elif attr == "fpregs":
@@ -596,4 +645,8 @@ class GenericProcess(metaclass=MetaProcess):
 
     def read_from_frame(self, num_bytes):
         return self.stack.read_from_frame(num_bytes)
+
+    def get_syscall_info(self):
+        #do this
+        pass
 
