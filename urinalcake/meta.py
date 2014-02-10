@@ -59,7 +59,8 @@ class Live:
 
 @decorator
 def advance(fn, cls, *args, **kwargs):
+    #on advance all things that are in "set" should also be set
     for attr in cls._live:
-        cls._invalidate_attr(attr)
+        cls._get_update.add(attr)
     return fn(cls, *args, **kwargs)
 

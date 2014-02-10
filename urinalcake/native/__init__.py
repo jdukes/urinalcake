@@ -439,8 +439,8 @@ def _write_mem(pid, addr, data):
     # >>> len(_read_mem(pid, instruction_pointer, 10))
 
     num_bytes = len(data)
-    bound_overflow = num_bytes % WORD_LEN
-    if bound_overflow:
+    if num_bytes % WORD_LEN:
+        bound_overflow = WORD_LEN - (num_bytes % WORD_LEN)
         last_word_addr = addr + (num_bytes - bound_overflow)
         last_word = _peek_data(pid, last_word_addr)
         data += last_word[bound_overflow:]
@@ -606,19 +606,23 @@ class PtraceProcess(metaclass=MetaProcess):
 
     We now have a ptrace process.
 
+    >>> fd, char_ptr, size = next(s.args[:3] for s in p.iter_syscall() if s.name == 'sys_write' )
+    >>> new_txt = b"potato\\n\\0"
+    >>> p.write_mem(char_ptr, new_txt)
+    >>> p.regs.rdx = len(new_txt)
+    >>> p.next_syscall()
+    potato
+    True
     >>> p.kill()
 
     """
-    #char_ptr, size = next( (p.regs.rsi,p.regs.rdx)
-    #                           for p in p.iter_syscall()
-    #                           if p.regs.orig_rax == 1 )
-    # ^ this sucks actually.
+    #perhaps this is better....
     # Live should take a get and set method
     regs = Live()
     fpregs = Live()
     mmap = Live()
     stack = Live()
-    last_sig = Live()
+    #last_sig = Live()
 
     def __init__(self, pid):
         #add setopts
@@ -682,9 +686,6 @@ class PtraceProcess(metaclass=MetaProcess):
             self.stack = self.mmap.get_stack()
         elif attr == "last_sig":
             self.last_sig = self.get_signal()
-
-    def _invalidate_attr(self, attr):
-        self._get_update.add(attr)
 
     def _set_regs(self):
         _setregs(self.pid, self._regs)
