@@ -349,9 +349,9 @@ def _peek_data(pid, addr):
     """
     data = ptrace(PTRACE_PEEKDATA, pid, addr, 0)
     if WORD_LEN == 8:
-        return struct.pack('q', data)
+        return bytes(struct.pack('Q', data))
     if WORD_LEN == 4:
-        return struct.pack('l', data)
+        return bytes(struct.pack('L', data))
 
 
 def _read_mem(pid, addr, num_bytes):
@@ -386,8 +386,72 @@ def _peek_user(pid, addr):
 
     """
     assert addr % WORD_LEN == 0, "addr must be word aligned"
-    return ptrace(PTRACE_PEEKUSER, pid, addr, 0)
+    data = ptrace(PTRACE_PEEKUSER, pid, addr, 0)
+    if WORD_LEN == 8:
+        return bytes(struct.pack('Q', data))
+    if WORD_LEN == 4:
+        return bytes(struct.pack('L', data))
 
+
+def _poke_data(pid, addr, data):
+    """Internal wrapper for PTRACE_POKEDATA, returns True on success.
+
+    This does the same thing as PTRACE_POKETEXT. Write `data` word to
+    `addr` in the target process memory.
+
+    >>> pid = launch_process('/bin/ls', 'ls')
+    >>> regs = _getregs(pid)
+    >>> instruction_pointer = regs.get_agnostic("ip")
+    >>> orig_data = _peek_data(pid, instruction_pointer)
+    >>> _poke_data(pid, instruction_pointer, b'\\x90' * WORD_LEN)
+    >>> orig_data == _peek_data(pid, instruction_pointer)
+    False
+
+    Our data is updated
+    >>> _poke_data(pid, instruction_pointer, orig_data)
+    >>> orig_data == _peek_data(pid, instruction_pointer)
+    True
+
+    And cleanup...
+    >>> kill(pid, 9)
+
+    """
+    assert (addr % WORD_LEN) == 0, "addr must be word aligned"
+    assert len(data) == WORD_LEN, "data must be of size %d" % WORD_LEN
+    if WORD_LEN == 8:
+        send_data = struct.unpack('Q', data)[0]
+    elif WORD_LEN == 4:
+        send_data = struct.unpack('L', data)[0]
+    ptrace(PTRACE_POKEDATA, pid, addr, send_data)
+
+
+def _write_mem(pid, addr, data):
+    """Helper function for that wrapps _poke_data, returning nothing.
+
+    This function allows you to write a number of bytes to memory
+    starting at an address from a given traced pid.
+    """
+
+    # >>> pid = launch_process('/bin/ls', 'ls')
+    # >>> regs = _getregs(pid)
+    # >>> instruction_pointer = regs.get_agnostic("ip")
+
+    # >>> len(_read_mem(pid, instruction_pointer, 10))
+
+    num_bytes = len(data)
+    bound_overflow = num_bytes % WORD_LEN
+    if bound_overflow:
+        last_word_addr = addr + (num_bytes - bound_overflow)
+        last_word = _peek_data(pid, last_word_addr)
+        data += last_word[bound_overflow:]
+        num_bytes += bound_overflow
+    for i in range(0, num_bytes, WORD_LEN):
+        _poke_data(pid, addr + i, data[i:i + WORD_LEN])
+
+
+def _poke_user(pid, addr, data):
+# PTRACE_POKEUSER
+    pass
 
 def _setregs(pid, regs):
     """Internal wrapper for PTRACE_SETREGS.
@@ -636,7 +700,14 @@ class PtraceProcess(metaclass=MetaProcess):
         while not pid == self.pid:
             pid, status = wait()
         return pid, sig
-        
+
+    def read_mem(self, addr, num_bytes):
+        return _read_mem(self.pid, addr, num_bytes)
+
+    def write_mem(self, addr, data):
+        return _write_mem(self.pid, addr, data)
+
+
     def kill(self):
         _kill(self.pid)
 
