@@ -3,13 +3,9 @@
   lets discuss organization
 ** Isolate all ctypes and direct C interfaces to directory of their own
 *** (long distance) replace all ctypes with library that parses c
-* add ability to launch process and trace (PTRACE_TRACME)
-** This may be best done by inheritnig Process as NewProcess
-** Change Process to reflect the functionality of PTRACE_SEIZE
-** create `seize`, `attach`, and `trace_launch` helper functions
 * document everything for make of good introspect
 * fix all "live" functionality
-** unit test all reads by exposing core functionality and verifying it reflects wrapped functionality
+** DONE unit test all reads by exposing core functionality and verifying it reflects wrapped functionality
 ** make sure that reg changes are reflected 
 *** test case for this should be change output of `ls /` to "hello world"
 ** make sure memory reads and writes are live
@@ -62,3 +58,7 @@
 * write a wrapper that exposes functionality based on OS
 * find a way to turn this in to a stand-alone binary using evil hackery
 * write a front end that displays useful info
+* DONE add ability to launch process and trace (PTRACE_TRACME)
+** This may be best done by inheritnig Process as NewProcess
+** Change Process to reflect the functionality of PTRACE_SEIZE
+** TODO create `seize`, `attach`, and `trace_launch` helper functions
