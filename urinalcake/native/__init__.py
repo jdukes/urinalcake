@@ -10,6 +10,7 @@ from os import wait, kill, execl, fork
 from sys import stdout
 
 from ..meta import Live, advance, MetaProcess
+from .defines import * #This is suck
 
 #__all__ = []
 
@@ -32,41 +33,6 @@ errors = {
     16: "There was an error with allocating or freeing a debug register.",
     # ^ EBUSY
     22: "An attempt was made to set an invalid option."} #EINVAL
-
-PROCESS_ALIVE = 1407 #???
-PTRACE_TRACEME = 0
-PTRACE_PEEKTEXT = 1
-PTRACE_PEEKDATA = 2
-PTRACE_PEEKUSER = 3
-PTRACE_POKETEXT = 4
-PTRACE_POKEDATA = 5
-PTRACE_POKEUSER = 6
-PTRACE_CONT = 7
-PTRACE_KILL = 8
-PTRACE_SINGLESTEP = 9
-PTRACE_GETREGS = 12
-PTRACE_SETREGS = 13
-PTRACE_GETFPREGS = 14
-PTRACE_SETFPREGS = 15
-PTRACE_ATTACH = 16
-PTRACE_DETACH = 17
-PTRACE_GETFPXREGS = 18
-PTRACE_SETFPXREGS = 19
-PTRACE_SYSCALL = 24
-PTRACE_SETOPTIONS = 0x4200
-PTRACE_GETEVENTMSG = 0x4201
-PTRACE_GETSIGINFO = 0x4202
-PTRACE_SETSIGINFO = 0x4203
-PTRACE_GETREGSET = 0x4204
-PTRACE_SETREGSET = 0x4205
-PTRACE_SEIZE = 0x4206
-PTRACE_INTERRUPT = 0x4207
-PTRACE_LISTEN = 0x4208
-PTRACE_PEEKSIGINFO = 0x4209
-
-#/usr/include/asm-generic/signal.h
-#/usr/include/sys/syscall.h
-#/usr/include/asm/unistd_64.h
 
 
 ###############################################################################
@@ -102,8 +68,6 @@ else:
 # ptrace(PTRACE_SETSIGINFO, pid, 0, &siginfo);
 # ptrace(PTRACE_GETEVENTMSG, pid, 0, &long_var);
 # ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_flags);
-
-
 
 
 
@@ -151,6 +115,9 @@ class Regs(ctypes.Structure):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._agnostic_names = ARCH_AGNOSTIC_REGS
+        self._syscall_number = SYSCALL_NUM
+        self._syscall_arg_regs = SYSCALL_ARG_REGS
+        self._syscall_table = SYSCALL_TABLE
 
     def __repr__(self):
         attrs = '\n '.join( "%s = %0.{}x".format(WORD_LEN*2) % \
@@ -185,75 +152,19 @@ def set_x86_regnames(prefix):
 if platform.machine() == 'x86_64':
     #some of these will be pointers always, fix the defs to match
     ARCH_AGNOSTIC_REGS = set_x86_regnames("r")
-    FPRegs._fields_ = [
-        ("cwd", ctypes.c_ushort),
-        ("swd", ctypes.c_ushort),
-        ("ftw", ctypes.c_ushort),
-        ("fop", ctypes.c_ushort),
-        ("rip",ctypes.c_ulonglong),
-        ("rdp",ctypes.c_ulonglong),
-        ("mxcsr", ctypes.c_uint),
-        ("mask", ctypes.c_uint),
-        ("st_space", ctypes.c_uint * 32),
-        ("xmm_space", ctypes.c_uint * 64),
-        ("padding", ctypes.c_uint * 24)]
-    Regs._fields_ = (
-        ("r15", ctypes.c_ulonglong),
-        ("r14", ctypes.c_ulonglong),
-        ("r13", ctypes.c_ulonglong),
-        ("r12", ctypes.c_ulonglong),
-        ("rbp", ctypes.c_ulonglong),
-        ("rbx", ctypes.c_ulonglong),
-        ("r11", ctypes.c_ulonglong),
-        ("r10", ctypes.c_ulonglong),
-        ("r9", ctypes.c_ulonglong),
-        ("r8", ctypes.c_ulonglong),
-        ("rax", ctypes.c_ulonglong),
-        ("rcx", ctypes.c_ulonglong),
-        ("rdx", ctypes.c_ulonglong),
-        ("rsi", ctypes.c_ulonglong),
-        ("rdi", ctypes.c_ulonglong),
-        ("orig_rax", ctypes.c_ulonglong),
-        ("rip", ctypes.c_ulonglong),
-        ("cs", ctypes.c_ulonglong),
-        ("eflags", ctypes.c_ulonglong),
-        ("rsp", ctypes.c_ulonglong),
-        ("ss", ctypes.c_ulonglong),
-        ("fs_base", ctypes.c_ulonglong),
-        ("gs_base", ctypes.c_ulonglong),
-        ("ds", ctypes.c_ulonglong),
-        ("es", ctypes.c_ulonglong),
-        ("fs", ctypes.c_ulonglong),
-        ("gs", ctypes.c_ulonglong))
+    from .arch.x86_64 import (SYSCALL_NUM, 
+                              SYSCALL_ARG_REGS, 
+                              FPREGS_FIELDS, 
+                              SYSCALL_TABLE)
 elif platform.machine() == 'i686':
-    ARCH_AGNOSTIC_REGS = set_x86_regnames("e")
-    FPRegs._fields_ = [
-        ("cwd", ctypes.c_long),
-        ("swd", ctypes.c_long),
-        ("twd", ctypes.c_long),
-        ("fip", ctypes.c_long),
-        ("fcs", ctypes.c_long),
-        ("foo", ctypes.c_long),
-        ("fos", ctypes.c_long),
-        ("st_space", ctypes.c_long * 20)]
-    Regs._fields_ = (
-        ("ebx", ctypes.c_long),
-        ("ecx", ctypes.c_long),
-        ("edx", ctypes.c_long),
-        ("esi", ctypes.c_long),
-        ("edi", ctypes.c_long),
-        ("ebp", ctypes.c_long),
-        ("eax", ctypes.c_long),
-        ("xds", ctypes.c_long),
-        ("xes", ctypes.c_long),
-        ("xfs", ctypes.c_long),
-        ("xgs", ctypes.c_long),
-        ("orig_eax", ctypes.c_long),
-        ("eip", ctypes.c_long),
-        ("xcs", ctypes.c_long),
-        ("eflags", ctypes.c_long),
-        ("esp", ctypes.c_long),
-        ("xss", ctypes.c_long))
+    ARCH_AGNOSTIC_REGS = set_x86_regnames("e") #the fuck do I do with this??
+    from .arch.x86 import (SYSCALL_NUM, 
+                           SYSCALL_ARG_REGS, 
+                           FPREGS_FIELDS, 
+                           SYSCALL_TABLE)
+    
+FPRegs._fields_ = FPREGS_FIELDS
+Regs._fields_ = REGS_FIELDS
 
 ###############################################################################
 # Helper Functions
@@ -658,6 +569,8 @@ class PtraceProcess(metaclass=MetaProcess):
         #this should return a syscall object that describes the
         #syscall and args.
         #http://blog.rchapman.org/post/36801038863/linux-system-call-table-for-x86-64
+        # The returned object should have `name` and `args` attributes
+        # `args` should be an ordered dict
         _next_syscall(self.pid)
         pid, status = wait()
         return status == PROCESS_ALIVE
