@@ -154,6 +154,7 @@ if platform.machine() == 'x86_64':
     ARCH_AGNOSTIC_REGS = set_x86_regnames("r")
     from .arch.x86_64 import (SYSCALL_NUM, 
                               SYSCALL_ARG_REGS, 
+                              REGS_FIELDS, 
                               FPREGS_FIELDS, 
                               SYSCALL_TABLE)
 elif platform.machine() == 'i686':
@@ -161,6 +162,7 @@ elif platform.machine() == 'i686':
     from .arch.x86 import (SYSCALL_NUM, 
                            SYSCALL_ARG_REGS, 
                            FPREGS_FIELDS, 
+                           REGS_FIELDS,
                            SYSCALL_TABLE)
     
 FPRegs._fields_ = FPREGS_FIELDS
