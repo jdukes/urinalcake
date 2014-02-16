@@ -115,8 +115,8 @@ class Regs(ctypes.Structure):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._agnostic_names = ARCH_AGNOSTIC_REGS
-        self._syscall_number = SYSCALL_NUM
-        self._syscall_arg_regs = SYSCALL_ARG_REGS
+        self._reg_syscall_number = SYSCALL_NUM
+        self.syscall_arg_regs = SYSCALL_ARG_REGS
         self._syscall_table = SYSCALL_TABLE
 
     def __repr__(self):
@@ -127,6 +127,20 @@ class Regs(ctypes.Structure):
 
     def get_agnostic(self, name):
         return self.__getattribute__(self._agnostic_names[name])
+
+    def _get_syscall_info(self):
+        number = self.__getattribute__(self._reg_syscall_number)
+        if number >= len(self._syscall_table):
+            return None
+        name = self._syscall_table[number]["name"]
+        arg_vals = [self.__getattribute__(arg) for arg in
+                    self.syscall_arg_regs]
+        arg_info = [ arg_i for arg_i in
+                     self._syscall_table[number]["args"]]
+        return {'number': number,
+                'name': name,
+                'arg_vals': arg_vals,
+                'arg_info': arg_info}
 
 
 class FPRegs(ctypes.Structure):
@@ -524,23 +538,24 @@ class PtraceProcess(metaclass=MetaProcess):
 
     We now have a ptrace process.
 
-    >>> fd, char_ptr, size = next(s.args[:3] for s in p.iter_syscall() if s.name == 'sys_write' )
+    >>> syscall_dict = next(s for s in p.iter_syscall() if s["name"] == 'sys_write' )
+    >>> fd, char_ptr, size = syscall_dict["arg_vals"][:3]
     >>> new_txt = b"potato\\n\\0"
     >>> p.write_mem(char_ptr, new_txt)
     >>> p.regs.rdx = len(new_txt)
-    >>> p.next_syscall()
+    >>> syscall_dict = p.next_syscall()
     potato
-    True
     >>> p.kill()
 
     """
-    #perhaps this is better....
+    #this still sucks
     # Live should take a get and set method
     regs = Live()
     fpregs = Live()
     mmap = Live()
     stack = Live()
-    #last_sig = Live()
+    #^ these need to get fixed. there's something funky about how
+    #they're being generated
 
     def __init__(self, pid):
         #add setopts
@@ -548,6 +563,8 @@ class PtraceProcess(metaclass=MetaProcess):
         self.pid = pid
         self._set_update = set()
         self._get_update = set(self._live)
+        self.status = 0xff00 #we don't know the status yet. See if
+                             #this can be fixed
 
     def __del__(self):
         #What's the right thing for this?
@@ -557,14 +574,14 @@ class PtraceProcess(metaclass=MetaProcess):
             pass
 
     def iter_step(self):
-        while self.step():
-            yield self
+        while self.is_alive():
+            yield self.step()
         raise StopIteration
 
     def iter_syscall(self):
         #perhaps this should take an arg of a list of syscall numbers
-        while self.next_syscall():
-            yield self
+        while self.is_alive():
+            yield self.next_syscall()
         raise StopIteration
 
     @advance
@@ -579,8 +596,8 @@ class PtraceProcess(metaclass=MetaProcess):
         # The returned object should have `name` and `args` attributes
         # `args` should be an ordered dict
         _next_syscall(self.pid)
-        pid, status = wait()
-        return status == PROCESS_ALIVE
+        pid, status = self.wait()
+        return self.get_syscall_info()
 
     @advance
     def step(self):
@@ -588,8 +605,9 @@ class PtraceProcess(metaclass=MetaProcess):
 
         """
         _single_step(self.pid)
-        pid, status = wait()
-        return status == PROCESS_ALIVE
+        pid, status = self.wait()
+        #do something useful here
+        return self
 
     def get_signal(self):
         return _get_siginfo(self.pid)
@@ -624,7 +642,8 @@ class PtraceProcess(metaclass=MetaProcess):
         pid, status = wait()
         while not pid == self.pid:
             pid, status = wait()
-        return pid, sig
+        self.status = status
+        return pid, status
 
     def read_mem(self, addr, num_bytes):
         return _read_mem(self.pid, addr, num_bytes)
@@ -632,6 +651,10 @@ class PtraceProcess(metaclass=MetaProcess):
     def write_mem(self, addr, data):
         return _write_mem(self.pid, addr, data)
 
+    def is_alive(self):
+        #as long as the high order bits of status are nonzero, we're
+        #alive. I think...
+        return not ((self.status & 0xff00) >> 8 == 0)
 
     def kill(self):
         _kill(self.pid)
@@ -643,6 +666,6 @@ class PtraceProcess(metaclass=MetaProcess):
         return self.stack.read_from_frame(num_bytes)
 
     def get_syscall_info(self):
-        #do this
-        pass
+        return self.regs._get_syscall_info()
+
 
