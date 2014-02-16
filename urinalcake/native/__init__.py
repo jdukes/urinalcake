@@ -330,7 +330,8 @@ def _poke_data(pid, addr, data):
 
     """
     assert (addr % WORD_LEN) == 0, "addr must be word aligned"
-    assert len(data) == WORD_LEN, "data must be of size %d" % WORD_LEN
+    assert len(data) == WORD_LEN, \
+        "data must be of size %d not %d" % (WORD_LEN, len(data))
     if WORD_LEN == 8:
         send_data = struct.unpack('Q', data)[0]
     elif WORD_LEN == 4:
@@ -343,21 +344,25 @@ def _write_mem(pid, addr, data):
 
     This function allows you to write a number of bytes to memory
     starting at an address from a given traced pid.
+    
+    >>> pid = launch_process('/bin/ls', 'ls')
+    >>> regs = _getregs(pid)
+    >>> instruction_pointer = regs.get_agnostic("ip")
+
+    >>> _write_mem(pid, instruction_pointer, b'AAAAAAAAA')
+    >>> b'AAAAAAAAA' == _read_mem(pid, instruction_pointer, 9)
+    True
+    
     """
-
-    # >>> pid = launch_process('/bin/ls', 'ls')
-    # >>> regs = _getregs(pid)
-    # >>> instruction_pointer = regs.get_agnostic("ip")
-
-    # >>> len(_read_mem(pid, instruction_pointer, 10))
-
     num_bytes = len(data)
-    if num_bytes % WORD_LEN:
-        bound_overflow = WORD_LEN - (num_bytes % WORD_LEN)
-        last_word_addr = addr + (num_bytes - bound_overflow)
+    not_aligned = bool(num_bytes % WORD_LEN)
+    if not_aligned:
+        bound_overflow = num_bytes % WORD_LEN
+        last_aligned = (int(num_bytes / WORD_LEN) * WORD_LEN)
+        last_word_addr = addr + last_aligned
         last_word = _peek_data(pid, last_word_addr)
         data += last_word[bound_overflow:]
-        num_bytes += bound_overflow
+        num_bytes = last_aligned + WORD_LEN
     for i in range(0, num_bytes, WORD_LEN):
         _poke_data(pid, addr + i, data[i:i + WORD_LEN])
 
