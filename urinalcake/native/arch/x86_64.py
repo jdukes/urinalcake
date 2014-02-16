@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import ctypes
 
-SYSCALL_NUM = "rax"
+SYSCALL_NUM = "orig_rax"
 SYSCALL_ARG_REGS = ["rdi", "rsi", "rdx", "r10", "r8", "r9"]
 FPREGS_FIELDS = [
     ("cwd", ctypes.c_ushort),
@@ -1134,3 +1134,4 @@ SYSCALL_TABLE = [{'args': ['pid_t pid',
                   'number': '0',
                   'name': 'sys_read'}]
 
+SYSCALL_TABLE.reverse() #fix this, get rid of number field

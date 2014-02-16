@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import ctypes
 
-SYSCALL_NUM = "eax"
+SYSCALL_NUM = "orig_eax"
 SYSCALL_ARG_REGS = ["ebx", "ecx", "edx", "esx", "edi"]
 FPREGS_FIELDS = (
     ("cwd", ctypes.c_long),

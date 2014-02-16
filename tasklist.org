@@ -1,4 +1,6 @@
 #+TODO: TODO(t) | BLOCKED(b) DONE(d) FUCKTHISSHITNOPE(f)
+* TODO make Process use internal wait to set last status
+** use this to make sure thing is running 
 * Break code in to multiple files (I will handle this)
   lets discuss organization
 ** Isolate all ctypes and direct C interfaces to directory of their own
