@@ -538,12 +538,13 @@ class PtraceProcess(metaclass=MetaProcess):
 
     We now have a ptrace process.
 
-    >>> syscall_dict = next(s for s in p.iter_syscall() if s["name"] == 'sys_write' )
-    >>> fd, char_ptr, size = syscall_dict["arg_vals"][:3]
+    >>> sycall = next(s for s in p.iter_syscall() if s.name == 'sys_write' )
+    >>> fd, char_ptr, size = syscall.args[:3]
     >>> new_txt = b"potato\\n\\0"
     >>> p.write_mem(char_ptr, new_txt)
     >>> p.regs.rdx = len(new_txt)
-    >>> syscall_dict = p.next_syscall()
+    >>> syscall.args[2] = len(new_txt)
+    >>> syscall = p.next_syscall()
     potato
     >>> p.kill()
 
